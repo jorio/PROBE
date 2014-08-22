@@ -95,9 +95,15 @@ fan = {
 	count = 1,
 }
 
+-- This function is intentionally separated from fan.update to demonstrate that
+-- the profiler can also place hooks on functions that return value(s).
+function fan.getCount()
+	return math.abs(1-math.sin(love.timer.getTime())) * 50
+end
+
 -- monitored by uProbe
 function fan:update(dt)
-	self.count = math.abs(1-math.sin(love.timer.getTime())) * 50
+	self.count = fan.getCount()
 end
 
 -- monitored by dProbe
@@ -161,6 +167,9 @@ function love.load()
 
 	-- Same deal to profile update operations.
 	uProbe:hookAll(_G, 'update', {love})
+
+	-- Hook onto function that returns values
+	uProbe:hook(fan, 'getCount', 'fan')
 end
 
 function love.update(dt)

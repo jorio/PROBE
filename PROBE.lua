@@ -229,9 +229,11 @@ function PROBE:hook(t, fk, parentName)
 	end
 
 	t[fk] = function(...)
+		local ret
 		qp:pushEvent(func)
-		func(...)
+		ret = {func(...)}
 		qp:popEvent()
+		return unpack(ret)
 	end
 
 	if not self.hooks[t] then
