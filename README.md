@@ -27,6 +27,7 @@ function love.load()
 	-- Profile all functions named 'draw' in all subtables
 	-- of _G except _G.love.draw, _G.lg.draw
 	prof:hookAll(_G, 'draw', {love, lg})
+	prof:enable(true)
 end
 
 function love.draw()

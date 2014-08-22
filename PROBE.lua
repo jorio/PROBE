@@ -29,9 +29,15 @@ end
 
 local ROOT_EVENT = '<ROOT>'
 
-local PROBE = {}
+local PROBE = {
+	--- Functions to be replaced by no-ops when the profiler is turned off.
+	pausableFunctions = {} -- (filled out at the end of the file)
+}
 PROBE.__index = PROBE
 
+--- Creates a new empty profiler that does not track anything yet.
+-- In order to start using it, you must place hooks and/or create events, then
+-- enable the profiler.
 function PROBE.new(...)
 	local prof = setmetatable({}, PROBE)
 	PROBE.init(prof, ...)
@@ -41,7 +47,36 @@ end
 function PROBE:init(slidingWindowSize)
 	self.eventNames = {}
 	self.hooks = {}
+	self:initWindow()
+	self:enable(false)
+end
 
+--- Enable or disable profiling.
+-- When turned off, the hooked functions are reverted to their "core" form
+-- (without the PROBE wrapper), and the profiler stops collecting event
+-- timings. Therefore, the performance hit induced by the profiler is
+-- negligible when it is turned off.
+function PROBE:enable(yes)
+	yes = yes or yes == nil
+	self.enabled = yes
+
+	for t, tableHooks in pairs(self.hooks) do
+		for fk, hook in pairs(tableHooks) do
+			t[fk] = hook[yes and 'wrapper' or 'original']
+		end
+	end
+
+	for k, v in pairs(PROBE.pausableFunctions) do
+		self[k] = v[yes and 'enabled' or 'noop']
+	end
+
+	if self.enabled then
+		self:initWindow()
+	end
+end
+
+--- Resets the sliding window (for average values).
+function PROBE:initWindow()
 	self.warmingUp = true
 	self.window = {
 		size = slidingWindowSize or 60,
@@ -182,19 +217,20 @@ function PROBE:draw(x, y, w, h, title)
 		"can't render profile when a cycle is active")
 
 	local fh = love.graphics.getFont():getHeight()
+	local total = self.avg.delta
 
 	love.graphics.rectangle('line', x, y, w, h)
 
-	if self.warmingUp then
-		love.graphics.print(title.."\nwarming up...", x, y-fh)
+	if self.enabled and self.warmingUp then
+		love.graphics.print(title.."\n Warming up...", x, y-fh)
 		return
 	end
 
-	local total = self.avg.delta
-
-	love.graphics.print(
-		string.format("%s: %.3f ms", title, 1000*total),
-		x, y-fh)
+	if not self.enabled and love.timer.getTime()*2 % 2 < 1 then
+		love.graphics.print("*** profiler disabled ***", x, y-fh)
+	else
+		love.graphics.print(string.format("%s: %.3f ms", title, 1000*total), x, y-fh)
+	end
 
 	for k, event in pairs(self.avg.events) do
 		local dh = h*event.delta / total
@@ -228,19 +264,20 @@ function PROBE:hook(t, fk, parentName)
 		self.eventNames[func] = (parentName or '') .. '/' .. eventName
 	end
 
-	t[fk] = function(...)
-		local ret
-		qp:pushEvent(func)
-		ret = {func(...)}
-		qp:popEvent()
-		return unpack(ret)
+	if not self.hooks[t] then
+		self.hooks[t] = {}
 	end
 
-	if not self.hooks[t] then
-		self.hooks[t] = {[fk] = func}
-	else
-		self.hooks[t][fk] = func
-	end
+	self.hooks[t][fk] = {
+		original = func,
+		wrapper = function(...)
+			local ret
+			qp:pushEvent(func)
+			ret = {func(...)}
+			qp:popEvent()
+			return unpack(ret)
+		end
+	}
 
 	print("Hooked: " .. human)
 end
@@ -282,10 +319,19 @@ end
 --- Removes all hooks placed on functions in t.
 function PROBE:unhook(t)
 	for fk, func in pairs(self.hooks[t]) do
-		t[fk] = self.hooks[t][fk]
+		t[fk] = self.hooks[t][fk].original
 		self.hooks[t][fk] = nil
 		print("Unhooked: " .. fk .. ' from ' .. tostring(t))
 	end
+	self.hooks[t] = nil
+end
+
+-- fill out PROBE.pausableFunctions
+for i, k in ipairs{'startCycle', 'endCycle', 'pushEvent', 'popEvent'} do
+	PROBE.pausableFunctions[k] = {
+		enabled = PROBE[k],
+		noop = function() end
+	}
 end
 
 -- module

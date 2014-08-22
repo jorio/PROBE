@@ -170,6 +170,9 @@ function love.load()
 
 	-- Hook onto function that returns values
 	uProbe:hook(fan, 'getCount', 'fan')
+
+	dProbe:enable(true)
+	uProbe:enable(true)
 end
 
 function love.update(dt)
@@ -196,6 +199,10 @@ function love.keypressed(k)
 	elseif k == 'f' then showFan = not showFan
 	elseif k == 'p' then showPlanet = not showPlanet
 	elseif k == 's' then showSats = not showSats
+	elseif k == ' ' then
+		local enable = not dProbe.enabled
+		dProbe:enable(enable)
+		uProbe:enable(enable)
 	end
 end
 
@@ -204,8 +211,11 @@ function love.draw()
 	dProbe:startCycle()
 
 	love.graphics.setColor(255, 255, 255)
-	love.graphics.print("Hit T, F, P, S to toggle the Text, Fan, Planet or " ..
-		"Satellites\n...and see how the profiler reacts", 200, 10)
+	love.graphics.print(
+		"Hit T, F, P, S to toggle the Text, Fan, Planet or Satellites"
+		.."\n...and see how the profilers react."
+		.."\n\nHit the spacebar to enable/disable the profilers.",
+		200, 10)
 
 	if showText   then drawBlurb() end
 	if showFan    then fan:draw() end
@@ -219,6 +229,5 @@ function love.draw()
 	love.graphics.setColor(255, 255, 255)
 	dProbe:draw(20, 20, 150, 560, "DRAW CYCLE")
 	uProbe:draw(630, 20, 150, 560, "UPDATE CYCLE")
-
 end
 
